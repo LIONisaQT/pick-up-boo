@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">Pick Up Boo</string>
+    <string name="phoneNumHint">Boo phone number</string>
+    <string name="messageHint">What is your message for boo? (optional)</string>
+    <string name="defaultMessage">Please pick me up!</string>
+    <string name="noPermissions">Locked (insufficient permissions)</string>
+    <string name="requestButton">Request pick up boo!</string>
+    <string name="goToSettings">Go to app\'s settings to grant permissions</string>
+</resources>
