@@ -9,6 +9,7 @@ import android.database.Cursor;
 import android.location.Location;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.CountDownTimer;
 import android.provider.ContactsContract;
 import android.provider.Settings;
 import android.support.annotation.NonNull;
@@ -34,11 +35,12 @@ import java.util.List;
 import java.util.Map;
 
 public class MainActivity extends AppCompatActivity {
-
-    private static final int PERMISSION_ALL = 7;
+    private static final int PERMISSION_MAIN = 7;
     private static final String TAG = "Boo";
     public static final String MYPREFS = "myprefs";
     public static final String CONTACT = "";
+    private int seconds = 30;
+    private CountDownTimer timer = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,6 +56,7 @@ public class MainActivity extends AppCompatActivity {
 
     // Checks if permissions are granted, and if they aren't, add them to a list so the phone can
     // ask users for the necessary permissions
+    // TODO: make it easy to revoke permissions
     private boolean checkAndRequestPermissions() {
         int pLocation = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION);
         int pSMS = ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS);
@@ -68,7 +71,7 @@ public class MainActivity extends AppCompatActivity {
         if (pContacts != PackageManager.PERMISSION_GRANTED) listPermissions.add(Manifest.permission.READ_CONTACTS);
 
         if (!listPermissions.isEmpty()) {
-            ActivityCompat.requestPermissions(this, listPermissions.toArray(new String[listPermissions.size()]), PERMISSION_ALL);
+            ActivityCompat.requestPermissions(this, listPermissions.toArray(new String[listPermissions.size()]), PERMISSION_MAIN);
             return false;
         }
 
@@ -79,12 +82,12 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String permissions[], @NonNull int[] grantResults) {
         switch (requestCode) {
-            case PERMISSION_ALL: {
+            case PERMISSION_MAIN: {
                 Map<String, Integer> perms = new HashMap<>();
                 // Initialize the map with both permissions
                 perms.put(Manifest.permission.ACCESS_FINE_LOCATION, PackageManager.PERMISSION_GRANTED);
                 perms.put(Manifest.permission.SEND_SMS, PackageManager.PERMISSION_GRANTED);
-                perms.put(Manifest.permission.READ_CONTACTS, PackageManager.PERMISSION_GRANTED);
+//                perms.put(Manifest.permission.READ_CONTACTS, PackageManager.PERMISSION_GRANTED);
 
                 // Fill with actual results from user
                 if (grantResults.length > 0) {
@@ -92,9 +95,9 @@ public class MainActivity extends AppCompatActivity {
                         perms.put(permissions[i], grantResults[i]);
 
                     // Check for both permissions
-                    if (perms.get(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-                            && perms.get(Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED
-                            && perms.get(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) {
+                    if (perms.get(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED &&
+                            perms.get(Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED &&
+                            perms.get(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) {
                         unlockElements(true);
                     }
 
@@ -104,10 +107,14 @@ public class MainActivity extends AppCompatActivity {
                         // Permission is denied (this is the first time, when "never ask again" is not checked) so ask again explaining the usage of permission
                         // shouldShowRequestPermissionRationale will return true
                         // Show the dialog or snackbar saying its necessary and try again otherwise proceed with setup
-                        if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                                || ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.SEND_SMS)
-                                || ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.READ_CONTACTS)) {
-                            showDialogOK("All requested permissions (location and send SMS services) are required for this app",
+                        if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.ACCESS_FINE_LOCATION) ||
+                                ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.SEND_SMS) ||
+                                ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.READ_CONTACTS)) {
+                            // TODO: make READ_CONTACTS separately asked
+                            showDialogOK("These permissions let the app: \n\n" +
+                                            "- send boo your location\n" +
+                                            "- send boo a text message\n" +
+                                            "- read contacts in case you forgot their number",
                                     new DialogInterface.OnClickListener() {
                                         @Override
                                         public void onClick(DialogInterface dialog, int which) {
@@ -148,7 +155,6 @@ public class MainActivity extends AppCompatActivity {
             editMessage.setEnabled(true);
             sendButton.setText(R.string.requestButton);
 
-            // Turns on contact button's listener
             contactsButton.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View view) {
@@ -184,7 +190,12 @@ public class MainActivity extends AppCompatActivity {
                             null, null, null, null);
                     if (c != null && c.moveToFirst()) {
                         String number = c.getString(0);
-                        enterNumber(number);
+                        ((EditText)findViewById(R.id.numTextbox)).setText(number.replaceAll("\\D+", "")); // Removes all non-numeric characters
+
+                        // Number has to be saved in preferences, otherwise onResume's preference call will overwrite number
+                        SharedPreferences.Editor editor = getSharedPreferences(MYPREFS, 0).edit();
+                        editor.putString(CONTACT, ((EditText)findViewById(R.id.numTextbox)).getText().toString());
+                        editor.apply();
                     }
                 } finally {
                     if (c != null) {
@@ -195,24 +206,14 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // Inputs contact's phone number into the EditText
-    public void enterNumber(String number) {
-        ((EditText)findViewById(R.id.numTextbox)).setText(number.replaceAll("\\D+", "")); // Removes all non-numeric characters
-
-        // Saves regex'd number for future use
-        SharedPreferences.Editor editor = getSharedPreferences(MYPREFS, 0).edit();
-        editor.putString(CONTACT, ((EditText)findViewById(R.id.numTextbox)).getText().toString());
-        editor.apply();
-    }
-
     @Override
     protected void onResume() {
         super.onResume();
 
         // Makes sure all permissions are still granted when reopening app
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-                && ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED
-                && ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) {
             unlockElements(true);
 
             // Get last used phone number, if it is there
@@ -230,7 +231,7 @@ public class MainActivity extends AppCompatActivity {
     // User presses the button, grabs latitude and longitude before calling sendSMS, or goes into
     // app settings to enable permission(s)
     public void sendPressed(View v) {
-        // Explicitly needs to check if location information granted
+        // Explicitly needs to check if location information granted (thanks Google)
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             FusedLocationProviderClient mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
             mFusedLocationClient.getLastLocation().addOnSuccessListener(this, new OnSuccessListener<Location>() {
@@ -270,13 +271,14 @@ public class MainActivity extends AppCompatActivity {
                     if (phoneNum.length() > 0) {
                         try {
                             String message = ((EditText)findViewById(R.id.messageTextbox)).getText().toString();
-                            // Grab hint if no custom message entered
-                            if (message.length() == 0) {message = "Please pick me up!";}
+                            if (message.length() == 0) {message = "Please pick me up!";} // Default message if none entered
                             message += "\nHere's my last location: " + url;
 
                             Log.i(TAG, "sending pick up request to " + phoneNum + ":\n\"" + message + "\"");
                             smsManager.sendTextMessage(phoneNum, null, message, null, null);
                             Toast.makeText(getApplicationContext(), "Sent!", Toast.LENGTH_SHORT).show();
+
+                            startTimer();
                         } catch (Exception e) {
                             // TODO: maybe make snackbar instead
                             Log.e(TAG, "sms sending failed");
@@ -292,13 +294,14 @@ public class MainActivity extends AppCompatActivity {
                     if (phoneNum.length() > 0) {
                         try {
                             String message = ((EditText)findViewById(R.id.messageTextbox)).getText().toString();
-                            // Grab hint if no custom message entered
-                            if (message.length() == 0) {message = ((EditText)findViewById(R.id.messageTextbox)).getHint().toString();}
+                            if (message.length() == 0) {message = "Please pick me up!";} // Default message if none entered
                             message += "\nHere's my last location: " + mapLink;
 
                             Log.i(TAG, "sending pick up request to " + phoneNum + ":\n\"" + message + "\"");
                             smsManager.sendTextMessage(phoneNum, null, message, null, null);
                             Toast.makeText(getApplicationContext(), "Failed to shorten URL, sending long link instead", Toast.LENGTH_SHORT).show();
+
+                            startTimer();
                         } catch (Exception e) {
                             // TODO: maybe make snackbar instead
                             Log.e(TAG, "sms sending failed");
@@ -317,6 +320,36 @@ public class MainActivity extends AppCompatActivity {
         SharedPreferences.Editor editor = getSharedPreferences(MYPREFS, 0).edit();
         editor.putString(CONTACT, phoneNum);
         editor.apply();
+    }
+
+    // Sets timer so user doesn't spam boo with requests
+    // TODO: allow user to set personal timer
+    // TODO: allow button to be pressed to shorten timer maybe?
+    public void startTimer() {
+        if (timer == null) {
+            final Button button = (Button)findViewById(R.id.button);
+            timer = new CountDownTimer(seconds * 1000, 1000) {
+                @Override
+                public void onTick(long l) {
+                    Log.i(TAG, "Tick at " + l);
+                    seconds = Math.max(0, seconds - 1);
+                    button.setEnabled(false);
+                    button.setText("Please wait " + seconds
+                            + (seconds == 1 ? " second" : " seconds")
+                            + " before sending another request");
+                }
+
+                @Override
+                public void onFinish() {
+                    Log.i(TAG, "finished");
+                    seconds = 60;
+                    timer = null;
+                    button.setEnabled(true);
+                    button.setText(R.string.requestButton);
+                }
+            };
+            timer.start();
+        }
     }
 
     // Opens a snackbar
