@@ -48,9 +48,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         // Ask for permissions
-        if (checkAndRequestPermissions()) {
-            unlockElements(true);
-        }
+        if (checkAndRequestPermissions()) unlockElements(true);
         else unlockElements(false);
     }
 
@@ -87,7 +85,7 @@ public class MainActivity extends AppCompatActivity {
                 // Initialize the map with both permissions
                 perms.put(Manifest.permission.ACCESS_FINE_LOCATION, PackageManager.PERMISSION_GRANTED);
                 perms.put(Manifest.permission.SEND_SMS, PackageManager.PERMISSION_GRANTED);
-//                perms.put(Manifest.permission.READ_CONTACTS, PackageManager.PERMISSION_GRANTED);
+                perms.put(Manifest.permission.READ_CONTACTS, PackageManager.PERMISSION_GRANTED);
 
                 // Fill with actual results from user
                 if (grantResults.length > 0) {
@@ -155,6 +153,7 @@ public class MainActivity extends AppCompatActivity {
             editMessage.setEnabled(true);
             sendButton.setText(R.string.requestButton);
 
+            // TODO: send straight to contacts
             contactsButton.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View view) {
@@ -342,7 +341,7 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public void onFinish() {
                     Log.i(TAG, "finished");
-                    seconds = 60;
+                    seconds = 30;
                     timer = null;
                     button.setEnabled(true);
                     button.setText(R.string.requestButton);
